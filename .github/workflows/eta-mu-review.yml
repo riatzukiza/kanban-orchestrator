@@ -25,8 +25,8 @@ jobs:
       evidence_gates_script: |
         run_gate diff_stat git diff --stat "${PR_BASE_SHA}...HEAD"
         run_gate diff_hygiene git diff --check "${PR_BASE_SHA}...HEAD"
-        # Contracts-only package: every contract must read as EDN.
-        run_gate contracts_edn bb -e '(doseq [f (file-seq (java.io.File. "contracts")) :when (.endsWith (str f) ".edn")] (clojure.edn/read-string (slurp f)) (println "ok" (str f)))'
+        # Contracts-only package: every contract must be exactly one EDN form (read to EOF).
+        run_gate contracts_edn bb -e '(doseq [f (file-seq (java.io.File. "contracts")) :when (.endsWith (str f) ".edn")] (with-open [r (java.io.PushbackReader. (clojure.java.io/reader f))] (let [eof (Object.) forms (loop [n 0] (if (identical? eof (clojure.edn/read {:eof eof} r)) n (recur (inc n))))] (when-not (= 1 forms) (throw (ex-info (str f ": expected exactly one EDN form, read " forms) {}))) (println "ok" (str f)))))'
         run_gate package_json node -e 'JSON.parse(require("fs").readFileSync("package.json","utf8"))'
     secrets:
       ETA_MU_APP_ID: ${{ secrets.ETA_MU_APP_ID }}
